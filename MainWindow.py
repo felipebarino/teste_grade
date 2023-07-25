@@ -7,6 +7,9 @@ import pandas as pd
 import numpy as np
 from Loader import BraggMeter, SpectrumAcquirer
 from sensor import StrainSensor, TemperatureSensor
+from pyqtgraph import mkColor, mkPen, BarGraphItem, PlotCurveItem, LegendItem
+from PyQt5 import QtCore, QtGui
+
 logger = logging.getLogger(__name__)
 
 class MainWindow(Ui_MainWindow, QMainWindow):
@@ -18,6 +21,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.retranslateUi(self)
         self.connectActions()
 
+        self.setupGraph()
+
         try:
             self.braggmeter = BraggMeter(host='10.0.0.150', port=3500)
         except Exception as e:
@@ -28,6 +33,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         logger.debug(f'Sensores: \n{self.sensor_data}')
         self.strain_sensors = []
         self.temp_sensors = []
+        colors = ['k', 'b', 'c', 'r', 'g', 'y']
+        ci = 0
         for i in range(0, len(self.sensor_data)):
             sensor = self.sensor_data.iloc[i,:]
             logger.debug(sensor)
@@ -43,6 +50,12 @@ class MainWindow(Ui_MainWindow, QMainWindow):
                                       (None, None),
                                       sensor.to_dict())
                 )
+                self.strain_sensors[-1].curve_item = self.plotNewCurve([], [],
+                                                                       name=f'Def{len(self.strain_sensors)}',
+                                                                       pen=mkPen(color=colors[ci],
+                                                                                 width=2)
+                                                                       )
+                ci += 1
 
         self.channels = self.sensor_data['Canal'].unique().tolist()
 
@@ -62,6 +75,25 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.pushButton.clicked.connect(self.sendString)
         self.pushButton_oneshot.clicked.connect(self.measure)
         self.pushButton_continuous.clicked.connect(self.continuousMeasure)
+
+    def setupGraph(self):
+        logger.debug('Setup plotWidget da série temporal')
+        bg_color = self.palette().color(QtGui.QPalette.Window)
+        self.graphWidget.setBackground(mkColor('white'))
+        self.legend = LegendItem(offset=[0, 10])
+        self.legend.setParentItem(self.graphWidget.plotItem)
+
+        self.graphWidget.getAxis('left').setLabel('Deformação (ue)')
+        self.graphWidget.getAxis('bottom').setLabel('Horário')
+        self.graphWidget.plotItem.vb.setLimits()
+        self.graphWidget.plotItem.vb.setLimits(xMin=0)
+
+    def plotNewCurve(self, x, y, name=None, **kwargs):
+        logger.debug(('Plotar uma nova curva'))
+        curve = PlotCurveItem(x=x, y=y, clickable=True, **kwargs)
+        self.legend.addItem(curve, name)
+        self.graphWidget.addItem(curve)
+        return curve
 
     def sendString(self):
         text = self.lineEdit.text()
@@ -145,12 +177,31 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             sensor_ref = strain_sen.param_dict['Sensor']
             strain = strain_sen.getStrain(temperature=temp)
             measured_data[f'Strain (ue) @ {sensor_ref}'] = strain
+
+            self.plot_strain(strain_sen)
+
             self.plainTextEdit_2.insertPlainText(f"Strain@{strain_sen.name} \t\t {strain} ue")
             self.plainTextEdit_2.insertPlainText("\n")
 
         self.plainTextEdit_2.insertPlainText("____________________________________________________\n")
 
         logger.debug(measured_data)
+
+    def plot_strain(self, sensor):
+        max_xaxis = 50
+        xData, yData = sensor.curve_item.getData()
+        if len(xData) > max_xaxis:
+            xData = xData[-max_xaxis::]
+            yData = yData[-max_xaxis::]
+            xmin = xData[-max_xaxis]
+            xmax = xData[-1] + 10
+
+            self.graphWidget.setXRange(xmin, xmax, padding=0, update=False)
+        if len(xData) == 0:
+            x = 0
+        else:
+            x = xData[-1] + 1
+        sensor.curve_item.updateData(np.append(xData, x), np.append(yData, sensor.strain))
 
     def closeEvent(self, ev):
         try:

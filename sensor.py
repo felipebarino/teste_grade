@@ -21,8 +21,8 @@ class TemperatureSensor(Sensor):
 
     def getTemperature(self):
         x = self.lambdaBragg - self.lambdaBragg_0
-        return x ** 2 * self.s2 + x * self.s1 + self.s0
-
+        self.temperature = x ** 2 * self.s2 + x * self.s1 + self.s0
+        return self.temperature
 
 class StrainSensor(Sensor):
     def __init__(self, *args, cte=0, t0=30, **kwargs):
@@ -32,9 +32,11 @@ class StrainSensor(Sensor):
         self.tcs = self.param_dict['tcs (um/m/°C)']
         self.cte = cte
         self.t0 = t0
+        self.strain = None
 
     def getStrain(self, temperature=None):
         if temperature is None:
             temperature = self.t0
         x = self.lambdaBragg - self.lambdaBragg_0
-        return x / (self.k * self.lambdaBragg_0) * 1e6 - (self.cte + self.tcs) * (temperature - self.t0)
+        self.strain = x / (self.k * self.lambdaBragg_0) * 1e6 - (self.cte + self.tcs) * (temperature - self.t0)
+        return self.strain
