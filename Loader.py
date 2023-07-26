@@ -125,6 +125,9 @@ class SpectrumAcquirer(QObject):
         except Exception as e:
             logger.error(f'Não foi possível iniciar o OSA: {e}')
 
+    def setChannels(self, channels):
+        self.channels = channels
+
     def pause(self):
         logger.debug('Pause loader')
         if self.timer.isActive():
