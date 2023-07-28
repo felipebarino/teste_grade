@@ -98,7 +98,11 @@ class BraggMeter:
             lambdas = self.ask(f'bragg{channel}')
         i = lambdas.find('ACK') + 4
         lambdas = lambdas[i:-2].split(',')
-        return [float(lamb) for lamb in lambdas]
+        if len(lambdas) == 0:
+            return []
+        if lambdas[0] == '':
+            return []
+        return [float(lamb) if lamb else 0 for lamb in lambdas]
 
 
 class SpectrumAcquirer(QObject):

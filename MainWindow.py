@@ -1,3 +1,4 @@
+import os
 import datetime
 from ui.ui_MainWindow import Ui_MainWindow
 from PyQt5.QtWidgets import QMainWindow
@@ -118,7 +119,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             lambdas = self.braggmeter.ask(f'bragg{channel}')
             i = lambdas.find('ACK') + 4
             lambdas = lambdas[i:-2].split(',')
-            lambdas = [float(lamb) for lamb in lambdas]
+            lambdas = [float(lamb) for lamb in lambdas] if lambdas[0] else []
             sensors.extend(lambdas)
         sensors = np.array(sensors)
         sensors.sort()
@@ -151,9 +152,22 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.lambda2Measurement(sensors)
 
     def lambda2Measurement(self, lambdas, plot=True):
+        cursor = QtGui.QTextCursor(self.plainTextEdit_2.document())
+        cursor.setPosition(0)
+        self.plainTextEdit_2.setTextCursor(cursor)
+
         measured_data = {'Horário': datetime.datetime.now()}
-        self.plainTextEdit_2.insertPlainText(f"Bragg \t\t {lambdas}")
+        self.plainTextEdit_2.insertPlainText(f"Timestamp \t\t {measured_data['Horário']}\n")
+
+        if len(lambdas) == 0:
+            logger.error("FALHA MÁXIMA NA AQUISIÇÃO!!!!!!")
+            self.plainTextEdit_2.insertPlainText(f"FALHA MÁXIMA NA AQUISIÇÃO!!!!!!\n")
+
+        self.plainTextEdit_2.insertPlainText(f"Bragg \t\t\t {lambdas}")
         self.plainTextEdit_2.insertPlainText("\n")
+
+        local_temp_sensors = []
+        local_strain_sensors = []
 
         for bragg in lambdas:
             err = np.abs(bragg - self.sensor_data['Lambda Bragg (nm)'])
@@ -163,14 +177,16 @@ class MainWindow(Ui_MainWindow, QMainWindow):
                 for j in range(len(self.temp_sensors)):
                     if self.temp_sensors[j].lambdaBragg_0 == self.sensor_data['Lambda Bragg (nm)'][i]:
                         self.temp_sensors[j].lambdaBragg = bragg
+                        local_temp_sensors.append(self.temp_sensors[j])
                         break
             if tipo == 'Deformação':
                 for j in range(len(self.strain_sensors)):
                     if self.strain_sensors[j].lambdaBragg_0 == self.sensor_data['Lambda Bragg (nm)'][i]:
                         self.strain_sensors[j].lambdaBragg = bragg
+                        local_strain_sensors.append(self.strain_sensors[j])
                         break
         temp = 0
-        for temp_sen in self.temp_sensors:
+        for temp_sen in local_temp_sensors:
             temp_i = temp_sen.getTemperature()
             sensor_ref = temp_sen.param_dict['Sensor']
             measured_data[f'Bragg (nm) @ {sensor_ref}'] = temp_sen.lambdaBragg
@@ -181,7 +197,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.plainTextEdit_2.insertPlainText("\n")
         measured_data['Temperatura (°C)'] = temp
 
-        for strain_sen in self.strain_sensors:
+        for strain_sen in local_strain_sensors:
             sensor_ref = strain_sen.param_dict['Sensor']
             strain = strain_sen.getStrain(temperature=temp)
             measured_data[f'Bragg (nm) @ {sensor_ref}'] = strain_sen.lambdaBragg
@@ -197,8 +213,15 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         logger.debug(measured_data)
 
         df = pd.DataFrame(measured_data, index=[0])
-        with pd.ExcelWriter("medições.xlsx", mode='a', if_sheet_exists='overlay') as writer:
-            startrow = writer.sheets[self.comboBox.currentText()].max_row
+        file_exists = os.path.isfile("medições.xlsx")
+        mode = 'a' if file_exists  else 'w'
+        if_sheet_exists = 'overlay' if file_exists else None
+
+        # NOTE o writer ainda falha se tiver um arquivo, mas estiber corrompido.
+        # Talvez seja útil usar um try no writer e, se falhar, renomear o antigo
+        # pra não jogar fora e então criar um novo
+        with pd.ExcelWriter("medições.xlsx", mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+            startrow = writer.sheets[self.comboBox.currentText()].max_row if file_exists else 1
             if startrow == 1:
                 header = True
             else:
@@ -216,6 +239,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             xmax = xData[-1] + 10
 
             self.graphWidget.setXRange(xmin, xmax, padding=0, update=False)
+        # NOTE usar o timestamp (sec + 60*min + 3600*h) deve arrumar o delay introduzido por falha
         if len(xData) == 0:
             x = 0
         else:
