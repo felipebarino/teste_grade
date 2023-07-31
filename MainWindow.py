@@ -23,6 +23,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
         self.setupGraph()
 
+        self.file2save = 'medições.xlsx'
+
         try:
             self.braggmeter = BraggMeter(host='10.0.0.150', port=3500)
         except Exception as e:
@@ -213,20 +215,30 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         logger.debug(measured_data)
 
         df = pd.DataFrame(measured_data, index=[0])
-        file_exists = os.path.isfile("medições.xlsx")
-        mode = 'a' if file_exists  else 'w'
+        try:
+            self.appendData2Excel(self.file2save, df)
+        except:
+            k = 0
+            fname = f'medições{k}.xlsx'
+            while os.path.isfile(fname):
+                k += 1
+                fname = f'medições{k}.xlsx'
+            self.file2save = fname
+            self.appendData2Excel(fname, df)
+
+    def appendData2Excel(self, file_path, dataframe):
+        file_exists = os.path.isfile(file_path)
+        mode = 'a' if file_exists else 'w'
         if_sheet_exists = 'overlay' if file_exists else None
 
-        # NOTE o writer ainda falha se tiver um arquivo, mas estiber corrompido.
-        # Talvez seja útil usar um try no writer e, se falhar, renomear o antigo
-        # pra não jogar fora e então criar um novo
-        with pd.ExcelWriter("medições.xlsx", mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+        with pd.ExcelWriter(file_path, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
             startrow = writer.sheets[self.comboBox.currentText()].max_row if file_exists else 1
             if startrow == 1:
+                startrow = 0
                 header = True
             else:
                 header = False
-            df.to_excel(writer, sheet_name=self.comboBox.currentText(),
+            dataframe.to_excel(writer, sheet_name=self.comboBox.currentText(),
                         startrow=startrow, index=False, header=header)
 
     def plot_strain(self, sensor):
