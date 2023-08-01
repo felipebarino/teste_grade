@@ -59,6 +59,7 @@ class Ui_MainWindow(object):
         self.comboBox.setObjectName("comboBox")
         self.comboBox.addItem("")
         self.comboBox.addItem("")
+        self.comboBox.addItem("")
         self.horizontalLayout_2.addWidget(self.comboBox)
         spacerItem2 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem2)
@@ -114,6 +115,7 @@ class Ui_MainWindow(object):
         self.pushButton.setText(_translate("MainWindow", "Enviar"))
         self.comboBox.setItemText(0, _translate("MainWindow", "Grade"))
         self.comboBox.setItemText(1, _translate("MainWindow", "Demonstração"))
+        self.comboBox.setItemText(2, _translate("MainWindow", "Validação"))
         self.pushButton_oneshot.setText(_translate("MainWindow", "Realizar uma medição"))
         self.pushButton_continuous.setText(_translate("MainWindow", "Iniciar medição contínua"))
 from pyqtgraph import PlotWidget

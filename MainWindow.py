@@ -217,7 +217,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         df = pd.DataFrame(measured_data, index=[0])
         try:
             self.appendData2Excel(self.file2save, df)
-        except:
+        except Exception as e:
+            logger.error(f'Erro ao salvar: {e}')
             k = 0
             fname = f'medições{k}.xlsx'
             while os.path.isfile(fname):
