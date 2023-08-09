@@ -23,6 +23,9 @@ class TemperatureSensor(Sensor):
         self.s2 = self.param_dict['s2 (°C/nm²)']
 
     def getTemperature(self):
+        if self.lambdaBragg == 0:        # NOTE 0 é falha no sensor
+            return None
+
         x = self.lambdaBragg - self.lambdaBragg_0
         self.temperature = x ** 2 * self.s2 + x * self.s1 + self.s0
         return self.temperature
@@ -39,6 +42,9 @@ class StrainSensor(Sensor):
 
     def getStrain(self, temperature=None):
         self.setTemperature(temperature)
+        if self.lambdaBragg == 0:
+            return None
+
         x = self.lambdaBragg - self.lambdaBragg_0
         self.strain = x / (self.k * self.lambdaBragg_0) * 1e6 - (self.cte + self.tcs) * (self.temperature - self.t0)
         return self.strain

@@ -168,38 +168,51 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.plainTextEdit_2.insertPlainText(f"Bragg \t\t\t {lambdas}")
         self.plainTextEdit_2.insertPlainText("\n")
 
-        local_temp_sensors = []
-        local_strain_sensors = []
-
-        for bragg in lambdas:
-            err = np.abs(bragg - self.sensor_data['Lambda Bragg (nm)'])
-            i = err.argmin()
-            tipo = self.sensor_data['Tipo'][i]
-            if tipo == 'Temperatura':
-                for j in range(len(self.temp_sensors)):
-                    if self.temp_sensors[j].lambdaBragg_0 == self.sensor_data['Lambda Bragg (nm)'][i]:
-                        self.temp_sensors[j].lambdaBragg = bragg
-                        local_temp_sensors.append(self.temp_sensors[j])
-                        break
-            if tipo == 'Deformação':
-                for j in range(len(self.strain_sensors)):
-                    if self.strain_sensors[j].lambdaBragg_0 == self.sensor_data['Lambda Bragg (nm)'][i]:
-                        self.strain_sensors[j].lambdaBragg = bragg
-                        local_strain_sensors.append(self.strain_sensors[j])
-                        break
+        for sensor in self.temp_sensors:
+            dist = np.abs(lambdas - sensor.lambdaBragg_0)
+            if len(dist) != 0:
+                i = dist.argmin()
+                if dist[i] < 2.5:        # Distância máxima: 2.5nm
+                    sensor.lambdaBragg = lambdas[i]
+                else:
+                    sensor.lambdaBragg = 0
+            else:
+                sensor.lambdaBragg = 0
+            
+        for sensor in self.strain_sensors:
+            dist = np.abs(lambdas - sensor.lambdaBragg_0)
+            if len(dist) != 0:
+                i = dist.argmin()
+                if dist[i] < 2.5:        # Distância máxima: 2.5nm
+                    sensor.lambdaBragg = lambdas[i]
+                else:
+                    sensor.lambdaBragg = 0
+            else:
+                sensor.lambdaBragg = 0
+            
         temp = 0
-        for temp_sen in local_temp_sensors:
+        working_temp_sensors = 0
+
+        for temp_sen in self.temp_sensors:
             temp_i = temp_sen.getTemperature()
             sensor_ref = temp_sen.param_dict['Sensor']
             measured_data[f'Bragg (nm) @ {sensor_ref}'] = temp_sen.lambdaBragg
             measured_data[f'Temperatura (°C) @ {sensor_ref}'] = temp_i
-            temp += temp_i
-        temp = temp/(len(self.temp_sensors))
+
+            if temp_sen.lambdaBragg != 0:
+                temp += temp_i
+                working_temp_sensors += 1
+
+        if working_temp_sensors != 0:
+            temp = temp / working_temp_sensors
+        else:
+            temp = None
+
         self.plainTextEdit_2.insertPlainText(f"Temperatura \t\t {temp} °C")
         self.plainTextEdit_2.insertPlainText("\n")
         measured_data['Temperatura (°C)'] = temp
 
-        for strain_sen in local_strain_sensors:
+        for strain_sen in self.strain_sensors:
             sensor_ref = strain_sen.param_dict['Sensor']
             strain = strain_sen.getStrain(temperature=temp)
             measured_data[f'Bragg (nm) @ {sensor_ref}'] = strain_sen.lambdaBragg
