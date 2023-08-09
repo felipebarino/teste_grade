@@ -7,11 +7,15 @@
     <x>0</x>
     <y>0</y>
     <width>570</width>
-    <height>757</height>
+    <height>758</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Teste dos sensores ópticos</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>icon.svg</normaloff>icon.svg</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -248,7 +252,7 @@
      <x>0</x>
      <y>0</y>
      <width>570</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>
