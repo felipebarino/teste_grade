@@ -9,6 +9,7 @@ from Loader import BraggMeter, SpectrumAcquirer, SimulateBraggMeter
 from sensor import StrainSensor, TemperatureSensor
 from pyqtgraph import mkColor, mkPen, PlotCurveItem, LegendItem
 from PyQt5 import QtCore, QtGui
+from scipy.optimize import curve_fit
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,10 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.file2save = 'medições.xlsx'
 
         if simulation:
+            time_interval = 0.2
             self.braggmeter = SimulateBraggMeter(None)
         else:
+            time_interval = 1  # segundo
             try:
                 self.braggmeter = BraggMeter(host='10.0.0.150', port=3500)
             except Exception as e:
@@ -41,10 +44,12 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.channels = None
 
         if self.braggmeter is not None:
-            time_interval = 1  # segundo
             self.timedAcquirer = SpectrumAcquirer(self.braggmeter, time_interval,
                                                   self.channels, return_bragg=True)
             self.timedAcquirer.bragg_signal.connect(self.processBragg)
+
+        self.first_plr = True
+        self.init_plr = 0
 
     def setupSensors(self, config_path, sheet, plot=True):
         self.sensor_data = pd.read_excel(config_path, sheet_name=sheet)
@@ -262,22 +267,68 @@ class MainWindow(Ui_MainWindow, QMainWindow):
                         startrow=startrow, index=False, header=header)
 
     def plot_strain(self, sensor):
-        max_xaxis = 50
+        min_buffer = 10
+        max_buffer = 60
+        max_xaxis = 120
         xData, yData = sensor.curve_item.getData()
-        logger.debug(f'len(xData): {len(xData)}\tlen(yData): {len(yData)}')
-        if len(xData) > max_xaxis:
-            xData = xData[-max_xaxis::]
-            yData = yData[-max_xaxis::]
-            xmin = xData[-max_xaxis]
-            xmax = xData[-1] + 10
-
-            self.graphWidget.setXRange(xmin, xmax, padding=0, update=False)
-        # NOTE usar o timestamp (sec + 60*min + 3600*h) deve arrumar o delay introduzido por falha
         if len(xData) == 0:
             x = 0
         else:
             x = xData[-1] + 1
-        sensor.curve_item.updateData(np.append(xData, x), np.append(yData, sensor.strain))
+
+        xData, yData = np.append(xData, x), np.append(yData, sensor.strain)
+
+        logger.debug(f'len(xData): {len(xData)}\tlen(yData): {len(yData)}')
+
+        if len(xData) > min_buffer:
+            self.p, cov = curve_fit(self.linear, xData[self.init_plr::], yData[self.init_plr::])
+        # NOTE: melhorar continuidade
+            if self.first_plr:
+                self.p, cov = curve_fit(self.linear, xData[self.init_plr::], yData[self.init_plr::])
+            else:
+                b = (xData[self.init_plr-1]) * self.p[0] + self.p[1]
+                self.p, cov = curve_fit(self.linear, xData[self.init_plr::], yData[self.init_plr::],
+                                        bounds=((-np.inf, b - 1e-9), (np.inf, b + 1e-9)))
+
+            y = self.p[0] * np.array(xData[self.init_plr::]) + self.p[1]
+            e = self.error(yData[self.init_plr::], y, error_function='max')
+            # determina se uma nova janela deve ser criada,
+            if e > 5 or len(xData[self.init_plr::]) > max_buffer:
+                if self.first_plr:
+                    xData = [xData[0], xData[-2], xData[-1]]
+                    yData = [self.last_p[0]*xData[0] + self.last_p[1],
+                             self.last_p[0]*xData[-2] + self.last_p[1],
+                             yData[-1]]
+                else:
+                    x = xData[-2::]
+                    xData = xData[0:self.init_plr]
+                    xData = np.append(xData, x)
+                    yData = yData[0:self.init_plr]
+                    yData = np.append(yData, self.last_p[0] * xData[-2] + self.last_p[1])
+                    yData = np.append(yData, sensor.strain)
+                self.init_plr = len(xData) - 1
+                self.first_plr = False
+            self.last_p = self.p
+
+        if xData[-1] > max_xaxis:
+            self.graphWidget.setXRange(xData[-1] - max_xaxis, xData[-1] + 10,
+                                       padding=0, update=False)
+
+        sensor.curve_item.updateData(xData, yData)
+    @staticmethod
+    def error(y_true, y_plr, error_function='mse'):
+        if error_function == 'mse':
+            return np.mean( (y_true-y_plr)**2 )
+        if error_function == 'max':
+            return max(abs(y_true-y_plr))
+        if error_function == 'max_sq':
+            return max((y_true-y_plr)**2)
+        if error_function == 'mae':
+            return np.mean(abs(y_true-y_plr))
+
+    @staticmethod
+    def linear(x, a, b):
+        return a * x + b
 
     def closeEvent(self, ev):
         try:

@@ -122,6 +122,7 @@ class SimulateBraggMeter:
         if volatility is not None:
             self.volatility = volatility
 
+
     def start(self):
         pass
 
@@ -155,6 +156,7 @@ class SimulateBraggMeter:
         for sensor in self.sensors:
             sensor.lambdaBragg = sensor.lambdaBragg + \
                                  sensor.lambdaBragg_0 * self.variance * np.random.randn() * self.volatility
+
 
     def simulateFBGspectra(self, wl_bragg, wl=np.linspace(1500, 1600, 1000), A=1000, sigma=1):
         return A * np.exp(((wl-wl_bragg)/(2*sigma))**2)
