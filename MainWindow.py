@@ -26,7 +26,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
         self.setupGraph()
 
-        self.file2save = 'medições.xlsx'
+        self.file2save = 'medições_teste.xlsx'
 
         if simulation:
             self.braggmeter = SimulateBraggMeter(None)
@@ -47,6 +47,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             self.timedAcquirer = SpectrumAcquirer(self.braggmeter, time_interval,
                                                   self.channels, return_bragg=True)
             self.timedAcquirer.bragg_signal.connect(self.processBragg)
+
+        self.data_buffer = None
 
     def setupSensors(self, config_path, sheet, plot=True):
         self.sensor_data = pd.read_excel(config_path, sheet_name=sheet)
@@ -145,6 +147,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         if self.timedAcquirer.is_alive():
             self.pushButton_continuous.setText("Iniciar medição contínua")
             self.timedAcquirer.pause()
+            if self.data_buffer is not None:
+                self.appendData2Excel()
         else:
             self.pushButton_continuous.setText("Parar medição contínua")
             self.graphWidget.removeItem(self.legend)
@@ -236,37 +240,33 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.plainTextEdit_2.insertPlainText("____________________________________________________\n")
 
         df = pd.DataFrame(measured_data, index=[0])
-        try:
-            self.appendData2Excel(self.file2save, df)
-        except Exception as e:
-            logger.error(f'Erro ao salvar: {e}')
-            k = 0
-            fname = f'medições{k}.xlsx'
-            while os.path.isfile(fname):
-                k += 1
-                fname = f'medições{k}.xlsx'
-            self.file2save = fname
-            self.appendData2Excel(fname, df)
+        if self.data_buffer is None:
+            self.data_buffer = df
+        else:
+            self.data_buffer = pd.concat([self.data_buffer, df], ignore_index=True)
 
-    def appendData2Excel(self, file_path, dataframe):
-        file_exists = os.path.isfile(file_path)
-        mode = 'a' if file_exists else 'w'
-        if_sheet_exists = 'overlay' if file_exists else None
+        if len(self.data_buffer) > 50:
+            self.appendData2Excel()
 
-        with pd.ExcelWriter(file_path, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
-            startrow = writer.sheets[self.comboBox.currentText()].max_row if file_exists else 1
-            if startrow == 1:
-                startrow = 0
-                header = True
-            else:
-                header = False
-            dataframe.to_excel(writer, sheet_name=self.comboBox.currentText(),
-                        startrow=startrow, index=False, header=header)
+    def appendData2Excel(self):
+        self.thread = QtCore.QThread()
+        self.worker = ExcelDumper()
+        self.worker.setup(self.file2save, self.data_buffer, self.comboBox.currentText())
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.worker.file_changed.connect(self.update_file)
+        self.thread.start()
+        self.data_buffer = None
+
+    def update_file(self, file_name):
+        self.file2save = file_name
 
     def plot_strain(self, sensor):
         max_xaxis = 50
         xData, yData = sensor.curve_item.getData()
-        logger.debug(f'len(xData): {len(xData)}\tlen(yData): {len(yData)}')
         if len(xData) > max_xaxis:
             xData = xData[-max_xaxis::]
             yData = yData[-max_xaxis::]
@@ -290,3 +290,42 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         except Exception as e:
             logger.error(f'Erro ao fechar o aquisitor: {e}')
         ev.accept()
+
+class ExcelDumper(QtCore.QObject):
+    file_changed = QtCore.pyqtSignal(object)
+    finished = QtCore.pyqtSignal()
+
+    def setup(self, file_path, data, sheet_name):
+        self.file_path = file_path
+        self.data = data
+        self.sheet_name = sheet_name
+
+    def run(self):
+        try:
+            self.appendData2Excel()
+        except Exception as e:
+            logger.error(f'Erro ao salvar: {e}')
+            k = 0
+            fname = f'medições{k}.xlsx'
+            while os.path.isfile(fname):
+                k += 1
+                fname = f'medições{k}.xlsx'
+            self.file_path = fname
+            self.appendData2Excel()
+            self.file_changed.emit(fname)
+        self.finished.emit()
+
+    def appendData2Excel(self):
+        file_exists = os.path.isfile(self.file_path)
+        mode = 'a' if file_exists else 'w'
+        if_sheet_exists = 'overlay' if file_exists else None
+
+        with pd.ExcelWriter(self.file_path, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+            startrow = writer.sheets[self.sheet_name].max_row if file_exists else 1
+            if startrow == 1:
+                startrow = 0
+                header = True
+            else:
+                header = False
+            self.data.to_excel(writer, sheet_name=self.sheet_name,
+                        startrow=startrow, index=False, header=header)
