@@ -5,13 +5,14 @@ from PyQt5.QtWidgets import QMainWindow
 import logging
 import pandas as pd
 import numpy as np
-from Loader import BraggMeter, SpectrumAcquirer
+from Loader import BraggMeter, SpectrumAcquirer, SimulateBraggMeter
 from sensor import StrainSensor, TemperatureSensor
 from pyqtgraph import mkColor, mkPen, PlotCurveItem, LegendItem
 from PyQt5 import QtCore, QtGui
 
 logger = logging.getLogger(__name__)
 
+simulation = True
 class MainWindow(Ui_MainWindow, QMainWindow):
 
     def __init__(self, *args, **kwargs):
@@ -27,17 +28,19 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
         self.file2save = 'medições.xlsx'
 
-        try:
-            self.braggmeter = BraggMeter(host='10.0.0.150', port=3500)
-        except Exception as e:
-            logger.error(f"Erro ao abrir o BraggMeter: {e}")
-            self.braggmeter = None
+        if simulation:
+            self.braggmeter = SimulateBraggMeter(None)
+        else:
+            try:
+                self.braggmeter = BraggMeter(host='10.0.0.150', port=3500)
+            except Exception as e:
+                logger.error(f"Erro ao abrir o BraggMeter: {e}")
+                self.braggmeter = None
 
         self.sensor_data = None
         self.strain_sensors = None
         self.temp_sensors = None
         self.channels = None
-
 
         if self.braggmeter is not None:
             time_interval = 1  # segundo
@@ -75,6 +78,13 @@ class MainWindow(Ui_MainWindow, QMainWindow):
                                                                                      width=2)
                                                                            )
                 ci += 1
+        if simulation:
+            sensors = []
+            for sensor in self.temp_sensors:
+                sensors.append(sensor)
+            for sensor in self.strain_sensors:
+                sensors.append(sensor)
+            self.braggmeter.set_simulation(sensors=sensors)
 
     def connectActions(self):
         self.pushButton.clicked.connect(self.sendString)
@@ -89,6 +99,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.graphWidget.getAxis('bottom').setLabel('Horário')
         self.graphWidget.plotItem.vb.setLimits()
         self.graphWidget.plotItem.vb.setLimits(xMin=0)
+        self.graphWidget.plotItem.setClipToView(True)
 
         self.legend = LegendItem(offset=[0, 10])
         self.legend.setParentItem(self.graphWidget.plotItem)
@@ -120,10 +131,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         sensors = []
         for channel in self.channels:
             logger.debug(f'Canal : {channel}')
-            lambdas = self.braggmeter.ask(f'bragg{channel}')
-            i = lambdas.find('ACK') + 4
-            lambdas = lambdas[i:-2].split(',')
-            lambdas = [float(lamb) for lamb in lambdas] if lambdas[0] else []
+            lambdas = self.braggmeter.get_peaks(channel)
             sensors.extend(lambdas)
         sensors = np.array(sensors)
         sensors.sort()
@@ -167,7 +175,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             logger.error("FALHA MÁXIMA NA AQUISIÇÃO!!!!!!")
             self.plainTextEdit_2.insertPlainText(f"FALHA MÁXIMA NA AQUISIÇÃO!!!!!!\n")
 
-        self.plainTextEdit_2.insertPlainText(f"Bragg \t\t\t {lambdas}")
+        self.plainTextEdit_2.insertPlainText(f"Bragg \t\t {lambdas}")
         self.plainTextEdit_2.insertPlainText("\n")
 
         for sensor in self.temp_sensors:
@@ -227,8 +235,6 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             self.plainTextEdit_2.insertPlainText("\n")
         self.plainTextEdit_2.insertPlainText("____________________________________________________\n")
 
-        logger.debug(measured_data)
-
         df = pd.DataFrame(measured_data, index=[0])
         try:
             self.appendData2Excel(self.file2save, df)
@@ -260,6 +266,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
     def plot_strain(self, sensor):
         max_xaxis = 50
         xData, yData = sensor.curve_item.getData()
+        logger.debug(f'len(xData): {len(xData)}\tlen(yData): {len(yData)}')
         if len(xData) > max_xaxis:
             xData = xData[-max_xaxis::]
             yData = yData[-max_xaxis::]

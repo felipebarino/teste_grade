@@ -105,6 +105,61 @@ class BraggMeter:
         return [float(lamb) if lamb else 0 for lamb in lambdas]
 
 
+class SimulateBraggMeter:
+    def __init__(self, sensors, variance=1, volatility=1e-6):
+        self.variance = None
+        self.volatility = None
+        self.sensors = None
+        self.set_simulation(sensors=sensors,
+                            variance=variance,
+                            volatility=volatility)
+
+    def set_simulation(self, sensors=None, variance=None, volatility=None):
+        if sensors is not None:
+            self.sensors = sensors
+        if variance is not None:
+            self.variance = variance
+        if volatility is not None:
+            self.volatility = volatility
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def send(self, msg):
+        pass
+
+    def ask(self, msg):
+        pass
+
+    def get_osa_trace(self, channel):
+        self.simulate_random_shift()
+        r = None
+        for sensor in self.sensors:
+            if r is None:
+                r = self.simulateFBGspectra(sensor.lambdaBragg)
+            else:
+                r += self.simulateFBGspectra(sensor.lambdaBragg)
+        return r
+
+    def get_peaks(self, channel):
+        self.simulate_random_shift()
+        peaks = []
+        for sensor in self.sensors:
+            peaks.append(sensor.lambdaBragg)
+        return peaks
+
+    def simulate_random_shift(self):
+        for sensor in self.sensors:
+            sensor.lambdaBragg = sensor.lambdaBragg + \
+                                 sensor.lambdaBragg_0 * self.variance * np.random.randn() * self.volatility
+
+    def simulateFBGspectra(self, wl_bragg, wl=np.linspace(1500, 1600, 1000), A=1000, sigma=1):
+        return A * np.exp(((wl-wl_bragg)/(2*sigma))**2)
+
+
 class SpectrumAcquirer(QObject):
     spectra_signal = pyqtSignal(object)
     bragg_signal = pyqtSignal(object)
