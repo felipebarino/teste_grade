@@ -5,7 +5,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 FORMAT = '%(asctime)s @ %(name)s (%(levelname)s) >> %(message)s'
-logging.basicConfig(level=logging.DEBUG, format=FORMAT, datefmt='%d-%m-%Y %H:%M:%S')
+logging.basicConfig(level=logging.DEBUG, format=FORMAT, datefmt='%d-%m-%Y %H:%M:%S',
+                    filename='debug.log')
 
 if __name__ == '__main__':
     logger.debug(f'Iniciando...')

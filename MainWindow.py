@@ -12,7 +12,7 @@ from PyQt5 import QtCore, QtGui
 
 logger = logging.getLogger(__name__)
 
-simulation = True
+simulation = False
 class MainWindow(Ui_MainWindow, QMainWindow):
 
     def __init__(self, *args, **kwargs):
@@ -26,7 +26,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
         self.setupGraph()
 
-        self.file2save = 'medições_teste.xlsx'
+        self.file2save = 'medições.xlsx'
 
         if simulation:
             self.braggmeter = SimulateBraggMeter(None)
@@ -245,7 +245,7 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         else:
             self.data_buffer = pd.concat([self.data_buffer, df], ignore_index=True)
 
-        if len(self.data_buffer) > 50:
+        if len(self.data_buffer) > 240:
             self.appendData2Excel()
 
     def appendData2Excel(self):
