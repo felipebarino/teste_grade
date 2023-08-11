@@ -21,6 +21,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.retranslateUi(self)
         self.connectActions()
 
+        self.comboBox.model().item(2).setEnabled(True)
+
         self.setupGraph()
 
         self.file2save = 'medições.xlsx'
