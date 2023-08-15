@@ -28,6 +28,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
         self.file2save = 'medições.xlsx'
 
+        self.comboBox.model().item(2).setEnabled(False)
+
         if simulation:
             self.braggmeter = SimulateBraggMeter(None)
         else:
